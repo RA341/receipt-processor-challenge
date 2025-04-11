@@ -8,22 +8,21 @@ import (
 	"os"
 )
 
-func StartServer(addr, port string) {
+func StartServer(addr string) {
 	mux := http.NewServeMux()
 	registerEndpoints(mux)
 
-	finalAddr := fmt.Sprintf("%s:%s", addr, port)
-	slog.Info("Server listening on ", slog.String("addr", finalAddr))
-	if err := http.ListenAndServe(finalAddr, nil); err != nil {
+	slog.Info("Server listening on ", slog.String("addr", addr))
+	if err := http.ListenAndServe(addr, nil); err != nil {
 		slog.Error("Unable to start server ", err.Error())
 		os.Exit(1)
 	}
 }
 
 func registerEndpoints(mux *http.ServeMux) {
-	receiptSrv, err := InitServices()
+	receiptSrv, err := initServices()
 	if err != nil {
-		slog.Error("Unable to initialize services: ", err.Error())
+		slog.Error("Unable to initialize services:", err.Error())
 		os.Exit(1)
 	}
 
@@ -31,7 +30,7 @@ func registerEndpoints(mux *http.ServeMux) {
 	mux.Handle(baseRoute, rHandler)
 }
 
-func InitServices() (*service.ReceiptService, error) {
+func initServices() (*service.ReceiptService, error) {
 	db, err := service.NewDB()
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to db: %v", err)
