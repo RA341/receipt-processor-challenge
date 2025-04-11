@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"github.com/RA341/receipt-processor-challenge/service"
+	u "github.com/RA341/receipt-processor-challenge/utils"
 	"log/slog"
 	"net/http"
 	"os"
@@ -12,9 +13,9 @@ func StartServer(addr string) {
 	mux := http.NewServeMux()
 	registerEndpoints(mux)
 
-	slog.Info("Server listening on ", slog.String("addr", addr))
+	slog.Info("Server listening on", slog.String("addr", addr))
 	if err := http.ListenAndServe(addr, nil); err != nil {
-		slog.Error("Unable to start server ", err.Error())
+		slog.Error("Unable to start server ", u.ErrLog(err))
 		os.Exit(1)
 	}
 }
@@ -22,7 +23,7 @@ func StartServer(addr string) {
 func registerEndpoints(mux *http.ServeMux) {
 	receiptSrv, err := initServices()
 	if err != nil {
-		slog.Error("Unable to initialize services:", err.Error())
+		slog.Error("Unable to initialize services:", u.ErrLog(err))
 		os.Exit(1)
 	}
 
