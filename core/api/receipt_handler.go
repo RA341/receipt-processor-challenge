@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/RA341/receipt-processor-challenge/models"
 	"github.com/RA341/receipt-processor-challenge/service"
+	u "github.com/RA341/receipt-processor-challenge/utils"
 	"io"
 	"log/slog"
 	"net/http"
@@ -19,11 +20,15 @@ var (
 	idRegex         = regexp.MustCompile(`^\S+$`)
 )
 
+var (
+	BadRequestErr = "The receipt is invalid."
+	NotFoundErr   = "No receipt found for that ID."
+	InternalErr   = "Internal server error."
+)
+
 type ReceiptHandler struct {
 	srv *service.ReceiptService
 }
-
-// todo consider returning non pointer
 
 func NewReceiptHandler(srv *service.ReceiptService) (string, *ReceiptHandler) {
 	return "/receipts/", &ReceiptHandler{srv: srv}
@@ -46,37 +51,27 @@ func (rh *ReceiptHandler) GetReceiptPoints(w http.ResponseWriter, r *http.Reques
 	pathSegments := strings.Split(r.URL.Path, "/")
 	// The path should look like: "", "receipts", "{id}", "points"
 	if !(len(pathSegments) == 4 && pathSegments[3] == "points") {
-		http.Error(w, NotFoundErr, http.StatusBadRequest)
+		http.Error(w, NotFoundErr, http.StatusNotFound)
 		return
 	}
 
 	pathId := pathSegments[2]
 	if !idRegex.MatchString(pathId) {
-		http.Error(w, NotFoundErr, http.StatusBadRequest)
+		http.Error(w, NotFoundErr, http.StatusNotFound)
 		return
 	}
 
 	points, err := rh.srv.GetPointsById(pathId)
 	if err != nil {
-		http.Error(w, NotFoundErr, http.StatusBadRequest)
+		http.Error(w, NotFoundErr, http.StatusNotFound)
 		return
 	}
 
 	response := models.PointsResponse{Points: points}
-	marshal, err := json.Marshal(response)
-	if err != nil {
-		return
-	}
-
-	_, err = w.Write(marshal)
-	if err != nil {
-		slog.Warn("Unable to write response to client", err)
-		return
-	}
+	sendJsonResponse(w, response)
 }
 
 func (rh *ReceiptHandler) PostProcessReceipt(w http.ResponseWriter, r *http.Request) {
-	// Read the request body
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, BadRequestErr, http.StatusBadRequest)
@@ -85,18 +80,16 @@ func (rh *ReceiptHandler) PostProcessReceipt(w http.ResponseWriter, r *http.Requ
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			slog.Warn("error occurred while closing request body", err)
+			slog.Warn("error occurred while closing request body", u.ErrLog(err))
 		}
 	}(r.Body)
 
-	// Parse the JSON data into our Receipt struct
 	var receipt models.Receipt
 	if err := json.Unmarshal(body, &receipt); err != nil {
 		http.Error(w, BadRequestErr, http.StatusBadRequest)
 		return
 	}
 
-	// Validate the required fields
 	if err := validateReceipt(receipt); err != nil {
 		http.Error(w, BadRequestErr, http.StatusBadRequest)
 		return
@@ -104,20 +97,27 @@ func (rh *ReceiptHandler) PostProcessReceipt(w http.ResponseWriter, r *http.Requ
 
 	receiptId, err := rh.srv.NewReceipt(receipt)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		slog.Error("Unable to store receipt", u.ErrLog(err))
+		http.Error(w, InternalErr, http.StatusInternalServerError)
 		return
 	}
 
 	resp := models.IdResponse{Id: receiptId}
-	marshal, err := json.Marshal(resp)
+	sendJsonResponse(w, resp)
+}
+
+func sendJsonResponse(w http.ResponseWriter, jsonPayload any) {
+	marshal, err := json.Marshal(jsonPayload)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		slog.Error("Unable to marshal response to client", u.ErrLog(err))
+		http.Error(w, InternalErr, http.StatusInternalServerError)
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	_, err = w.Write(marshal)
 	if err != nil {
-		slog.Warn("Unable to write response to client", err)
+		slog.Warn("Unable to write response to client", u.ErrLog(err))
 	}
 }
 
@@ -134,12 +134,10 @@ func validateReceipt(receipt models.Receipt) error {
 		return fmt.Errorf("invalid purchaseTime format: must be in 24-hour format (HH:MM)")
 	}
 
-	// Validate items
 	if len(receipt.Items) < 1 {
 		return fmt.Errorf("at least one item is required")
 	}
 
-	// Validate each item
 	for i, item := range receipt.Items {
 		if item.ShortDescription == "" {
 			return fmt.Errorf("item %d is missing a short description", i+1)
@@ -149,7 +147,6 @@ func validateReceipt(receipt models.Receipt) error {
 		}
 	}
 
-	// Validate total (pattern: "^\\d+\\.\\d{2}$")
 	if !totalPattern.MatchString(receipt.Total) {
 		return fmt.Errorf("invalid total format: must be in format 0.00")
 	}
