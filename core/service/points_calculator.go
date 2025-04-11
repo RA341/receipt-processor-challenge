@@ -2,12 +2,25 @@ package service
 
 import (
 	"github.com/RA341/receipt-processor-challenge/models"
+	u "github.com/RA341/receipt-processor-challenge/utils"
 	"log/slog"
 	"math"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
+)
+
+var (
+	defaultPointRules = []calculationOpts{
+		pointsForRetailerName(),
+		pointsForRoundTotal(),
+		pointsForTotalMultipleOfQuarter(),
+		pointsPerTwoItems(),
+		pointsForItemDescriptionLength(),
+		pointsForOddPurchaseDay(),
+		pointsForPurchaseTimeBetween2And4PM(),
+	}
 )
 
 type calculationOpts func(receipt *models.Receipt) int64
@@ -24,7 +37,7 @@ func calculatePoints(receipt *models.Receipt, pointsCalculationsOpts ...calculat
 // Rule 1: One point for every alphanumeric character in the retailer name.
 func pointsForRetailerName() calculationOpts {
 	return func(receipt *models.Receipt) int64 {
-		points := int64(0) // Use int64
+		var points int64 = 0
 		for _, r := range receipt.Retailer {
 			if unicode.IsLetter(r) || unicode.IsDigit(r) {
 				points++
@@ -39,8 +52,8 @@ func pointsForRoundTotal() calculationOpts {
 	return func(receipt *models.Receipt) int64 {
 		if strings.HasSuffix(receipt.Total, ".00") {
 			_, err := strconv.ParseFloat(receipt.Total, 64)
-			if err == nil { // Check if it's a valid number
-				return int64(50) // Use int64
+			if err == nil { // if valid number
+				return int64(50)
 			}
 		}
 		return 0
@@ -57,7 +70,7 @@ func pointsForTotalMultipleOfQuarter() calculationOpts {
 		// Convert to cents for modulo check
 		totalInCents := int64(math.Round(totalFloat*100 + 0.00001)) // Add epsilon for precision
 		if totalInCents >= 0 && totalInCents%25 == 0 {
-			return int64(25) // Use int64
+			return int64(25)
 		}
 		return 0
 	}
@@ -83,7 +96,7 @@ func pointsForItemDescriptionLength() calculationOpts {
 		if receipt.Items == nil {
 			return 0
 		}
-		rulePoints := int64(0) // Use int64
+		var rulePoints int64 = 0
 		for _, item := range receipt.Items {
 			trimmedDesc := strings.TrimSpace(item.ShortDescription)
 			descLen := len(trimmedDesc)
@@ -91,10 +104,13 @@ func pointsForItemDescriptionLength() calculationOpts {
 			if descLen > 0 && descLen%3 == 0 {
 				priceFloat, err := strconv.ParseFloat(item.Price, 64)
 				if err != nil {
-					slog.Warn("Warning: Could not parse item price '%s' for item '%s'. Skipping points for this item.\n", item.Price, item.ShortDescription)
+					slog.Warn("Could not parse price for item. Skipping....",
+						slog.String("price", item.Price),
+						slog.String("shortDescription", item.ShortDescription),
+						u.ErrLog(err),
+					)
 					continue
 				}
-				// math.Ceil returns int64
 				itemPoints := int64(math.Ceil(priceFloat * 0.2))
 				rulePoints += itemPoints
 			}
@@ -111,12 +127,13 @@ func pointsForOddPurchaseDay() calculationOpts {
 		if err != nil {
 			slog.Warn("Could not parse purchase date",
 				slog.String("purchaseDate", receipt.PurchaseDate),
+				u.ErrLog(err),
 			)
 			return 0
 		}
 		day := purchaseDate.Day()
 		if day%2 != 0 {
-			return int64(6) // Use int64
+			return int64(6)
 		}
 		return 0
 	}
@@ -130,6 +147,7 @@ func pointsForPurchaseTimeBetween2And4PM() calculationOpts {
 		if err != nil {
 			slog.Warn("Could not parse purchase time",
 				slog.String("purchaseTime", receipt.PurchaseTime),
+				u.ErrLog(err),
 			)
 			return 0
 		}
@@ -138,7 +156,7 @@ func pointsForPurchaseTimeBetween2And4PM() calculationOpts {
 		time1600, _ := time.Parse(layout, "16:00")
 
 		if purchaseTime.After(time1400) && purchaseTime.Before(time1600) {
-			return int64(10) // Use int64
+			return int64(10)
 		}
 		return 0
 	}

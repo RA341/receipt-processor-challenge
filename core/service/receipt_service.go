@@ -2,17 +2,7 @@ package service
 
 import "github.com/RA341/receipt-processor-challenge/models"
 
-var (
-	defaultPointRules = []calculationOpts{
-		pointsForRetailerName(),
-		pointsForRoundTotal(),
-		pointsForTotalMultipleOfQuarter(),
-		pointsPerTwoItems(),
-		pointsForItemDescriptionLength(),
-		pointsForOddPurchaseDay(),
-		pointsForPurchaseTimeBetween2And4PM(),
-	}
-)
+var ()
 
 type ReceiptService struct {
 	db Database

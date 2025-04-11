@@ -12,11 +12,11 @@ type Database interface {
 }
 
 type FranklyWeHaveNoIdeaWhereYourDataIsDB struct {
-	dataMap *sync.Map
+	pointsTable *sync.Map
 }
 
 func NewDB() (*FranklyWeHaveNoIdeaWhereYourDataIsDB, error) {
-	return &FranklyWeHaveNoIdeaWhereYourDataIsDB{dataMap: &sync.Map{}}, nil
+	return &FranklyWeHaveNoIdeaWhereYourDataIsDB{pointsTable: &sync.Map{}}, nil
 }
 
 func (f *FranklyWeHaveNoIdeaWhereYourDataIsDB) CreatePoint(totalPoints int64) (transactionId string, err error) {
@@ -26,13 +26,13 @@ func (f *FranklyWeHaveNoIdeaWhereYourDataIsDB) CreatePoint(totalPoints int64) (t
 	}
 
 	transactionId = newUUID.String()
-	f.dataMap.Store(transactionId, totalPoints)
+	f.pointsTable.Store(transactionId, totalPoints)
 
 	return transactionId, err
 }
 
 func (f *FranklyWeHaveNoIdeaWhereYourDataIsDB) GetPointById(transactionId string) (totalPoints int64, err error) {
-	tmpPoint, ok := f.dataMap.Load(transactionId)
+	tmpPoint, ok := f.pointsTable.Load(transactionId)
 	if !ok {
 		return 0, fmt.Errorf("unable to find points for: %s", transactionId)
 	}
