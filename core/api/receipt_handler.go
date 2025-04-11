@@ -49,9 +49,9 @@ func (rh *ReceiptHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (rh *ReceiptHandler) GetReceiptPoints(w http.ResponseWriter, r *http.Request) {
 	pathSegments := strings.Split(r.URL.Path, "/")
-	// The path should look like: "", "receipts", "{id}", "points"
+	// The segments should look like: "", "receipts", "{id}", "points"
 	if !(len(pathSegments) == 4 && pathSegments[3] == "points") {
-		http.Error(w, NotFoundErr, http.StatusNotFound)
+		http.NotFound(w, r)
 		return
 	}
 

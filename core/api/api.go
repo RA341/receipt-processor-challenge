@@ -14,7 +14,7 @@ func StartServer(addr string) {
 	registerEndpoints(mux)
 
 	slog.Info("Server listening on", slog.String("addr", addr))
-	if err := http.ListenAndServe(addr, nil); err != nil {
+	if err := http.ListenAndServe(addr, mux); err != nil {
 		slog.Error("Unable to start server ", u.ErrLog(err))
 		os.Exit(1)
 	}
